@@ -4,7 +4,8 @@ namespace hw1 {
 
 enum class MaterialType {
     Diffuse,
-    Mirror
+    Mirror,
+    Dielectric
 };
 
 struct Camera {

@@ -22,6 +22,7 @@ set(SRCS src/3rdparty/miniz.h
          src/3rdparty/pugiconfig.hpp
          src/3rdparty/pugixml.hpp
          src/3rdparty/pugixml.cpp
+         src/3rdparty/pcg.h
          src/3rdparty/stb_image.h
          src/3rdparty/tinyexr.h
          src/3rdparty/tinyply.h
@@ -46,6 +47,8 @@ set(SRCS src/3rdparty/miniz.h
          src/compute_normals.cpp
          src/hw1.cpp
          src/hw2.cpp
+         src/bvh.cpp
+         src/wide_bvh.cpp
          src/hw3.cpp
          src/hw4.cpp
          src/image.cpp
