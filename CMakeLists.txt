@@ -12,7 +12,7 @@ set(CMAKE_BUILD_TYPE RelWithDebInfo)
 if(MSVC)
   add_compile_options(/Wall)
 else()
-  add_compile_options(-Wall)
+  add_compile_options(-Wall -mavx)
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
@@ -48,7 +48,7 @@ set(SRCS src/3rdparty/miniz.h
          src/hw1.cpp
          src/hw2.cpp
          src/bvh.cpp
-         src/wide_bvh.cpp
+         src/bvh.h
          src/hw3.cpp
          src/hw4.cpp
          src/image.cpp
