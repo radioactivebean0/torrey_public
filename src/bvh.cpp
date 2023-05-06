@@ -1,6 +1,6 @@
 #include "bvh.h"
+#include "shapes.h"
 #include "3rdparty/pcg.h"
-#include "hw2.h"
 #include <immintrin.h>
 #include <emmintrin.h>
 
@@ -8,7 +8,7 @@
 
 pcg32_state bvh_state = init_pcg32();
 
-inline void set_surrounding_aabb(std::shared_ptr<AABB> &parent, const std::shared_ptr<AABB> &a, const std::shared_ptr<AABB> &b){
+void set_surrounding_aabb(std::shared_ptr<AABB> &parent, const std::shared_ptr<AABB> &a, const std::shared_ptr<AABB> &b){
     parent->a = Vector3{
         min(a->a.x, b->a.x),
         min(a->a.y, b->a.y),
@@ -25,7 +25,7 @@ inline void set_surrounding_aabb(std::shared_ptr<AABB> &parent, const std::share
     return;
 }
 
-inline Real get_union_aabb_surface(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t end){
+Real get_union_aabb_surface(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t end){
     __m256d min_vec = _mm256_set_pd(boxes.at(start)->a.x, boxes.at(start)->a.y, boxes.at(start)->a.z, 0.0);
     __m256d max_vec = _mm256_set_pd(boxes.at(start)->b.x,boxes.at(start)->b.y,boxes.at(start)->b.z,0.0);
     __m256d tempa, tempb;
@@ -47,7 +47,7 @@ inline Real get_union_aabb_surface(std::vector<std::shared_ptr<AABB>> &boxes, si
     //return 2 * (diag.x * diag.y + diag.x * diag.z + diag.y * diag.z);
 }
 
-inline void get_bounds_aabb_list(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t end, Vector3 &a, Vector3 &b){
+void get_bounds_aabb_list(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t end, Vector3 &a, Vector3 &b){
     // Vector3 min_vec = boxes.at(start)->a;
     // Vector3 max_vec = boxes.at(start)->b;
     // for (int i = start+1; i < end; i++){
@@ -73,22 +73,22 @@ inline void get_bounds_aabb_list(std::vector<std::shared_ptr<AABB>> &boxes, size
     b = Vector3{extract_b[3],extract_b[2],extract_b[1]};
 }
 
-inline Real surface_area_one(Vector3 a, Vector3 b){
+Real surface_area_one(Vector3 a, Vector3 b){
     Vector3 diag = b - a;
     return 2 * (diag.x * diag.y + diag.x * diag.z + diag.y * diag.z);
 }
 
-inline Real surface_area_two(Vector3 a1, Vector3 b1, Vector3 a2, Vector3 b2){
+Real surface_area_two(Vector3 a1, Vector3 b1, Vector3 a2, Vector3 b2){
     Vector3 diag = max(b2, b1) - min(a1,a2);
     return 2 * (diag.x * diag.y + diag.x * diag.z + diag.y * diag.z);
 }
 
-inline Real surface_area_three(Vector3 a1, Vector3 b1, Vector3 a2, Vector3 b2, Vector3 a3, Vector3 b3){
+Real surface_area_three(Vector3 a1, Vector3 b1, Vector3 a2, Vector3 b2, Vector3 a3, Vector3 b3){
     Vector3 diag = max(max(b2, b1),b3) - min(min(a1,a2),a3);
     return 2 * (diag.x * diag.y + diag.x * diag.z + diag.y * diag.z);
 }
 
-inline uint32_t get_best_four_split(Vector3 a[], Vector3 b[], Real &sah, size_t chunksize){
+uint32_t get_best_four_split(Vector3 a[], Vector3 b[], Real &sah, size_t chunksize){
     Real temp_sah;
     uint32_t splitind = 1;
     sah = (surface_area_one(a[0],b[0])*chunksize)+ (surface_area_three(a[1],b[1],a[2],b[2],a[3],b[3])*3*chunksize);
@@ -105,11 +105,11 @@ inline uint32_t get_best_four_split(Vector3 a[], Vector3 b[], Real &sah, size_t 
     return splitind;
 }
 
-inline Real get_cost_ranges(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t mid, size_t end){
+Real get_cost_ranges(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t mid, size_t end){
     return (get_union_aabb_surface(boxes, start, mid)*(mid-start))+(get_union_aabb_surface(boxes, mid, end)*(end-mid))/get_union_aabb_surface(boxes, start, end);
 }
 
-inline std::shared_ptr<AABB> build_sah_bvh_helper(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t end){
+std::shared_ptr<AABB> build_sah_bvh_helper(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t end){
     // base cases
     if (end-start == 1) {
         return boxes.at(start);
@@ -235,7 +235,7 @@ inline std::shared_ptr<AABB> build_sah_bvh_helper(std::vector<std::shared_ptr<AA
     return node;
 }
 
-inline std::shared_ptr<AABB> build_bvh_helper(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t end, int split_method){
+std::shared_ptr<AABB> build_bvh_helper(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t end, int split_method){
     // base cases
     if (end-start == 1) {
         return boxes.at(start);
@@ -291,7 +291,7 @@ inline std::shared_ptr<AABB> build_bvh_helper(std::vector<std::shared_ptr<AABB>>
     }
 }
 
-inline AABB build_bvh(std::vector<Shape> &shapes, int split_method = 0){
+AABB build_bvh(std::vector<Shape> &shapes, int split_method = 0){
     std::vector<std::shared_ptr<AABB>> boxes;
     Vector3 p0, p1, p2;
 
@@ -312,16 +312,13 @@ inline AABB build_bvh(std::vector<Shape> &shapes, int split_method = 0){
         }
         box->shapes = std::vector<Shape*>{&shapes.at(shape)};
         boxes.push_back(box);
-        // if (split_method == 2){
-        //     box->surface_area = get_surface_area(&shapes.at(shape));
-        // }
     }
     if (split_method == 2){
         return *build_sah_bvh_helper(boxes, 0, boxes.size());
     }
     return *build_bvh_helper(boxes, 0, boxes.size(), split_method);
 }
-inline int hit_boxes_simd(const AABB &box, const Vector3 &ray, const Vector3 &lookfrom, Real t_min, Real t_max){
+int hit_boxes_simd(const AABB &box, const Vector3 &ray, const Vector3 &lookfrom, Real t_min, Real t_max){
     __m128d t0, t1, m128_lookfrom, invD, vect_min, vect_max, hitacc, temp;
     vect_min = _mm_set_pd1(t_min);
     vect_max = _mm_set_pd1(t_max);
@@ -352,7 +349,7 @@ inline int hit_boxes_simd(const AABB &box, const Vector3 &ray, const Vector3 &lo
     return res;
 }
 
-inline bool hit_box(const AABB &box, const Vector3 &ray, const Vector3 &lookfrom, Real t_min, Real t_max){
+bool hit_box(const AABB &box, const Vector3 &ray, const Vector3 &lookfrom, Real t_min, Real t_max){
     //return hit_box_simd(box, ray, lookfrom, t_min, t_max);
     for (int d = 0; d < 3; d++) {
         Real invD = 1.0 / ray[d];
@@ -369,70 +366,108 @@ inline bool hit_box(const AABB &box, const Vector3 &ray, const Vector3 &lookfrom
     return true;
 }
 
-inline bool hit_bvh(const AABB &bvh, const Vector3 &ray, const Vector3 &ray_origin, const Real eps, Shape **hit_shape, Real &t_val, Vector3 &b_coord, bool with_simd){
-    // base case
+bool hit_bvh_old(const AABB &bvh, const Vector3 &ray, const Vector3 &ray_origin, const Real eps, Real t_min, Real t_max, Shape **hs, Real &t, Vector2 &uv){
     if (bvh.shapes.size()==1){
-       // std::cout << "hit base" << std::endl;
         Real temp_t_val;
-        Shape* temp_shape = bvh.shapes.at(0);
-        if (auto *sph = std::get_if<Sphere>(temp_shape)){
-            temp_t_val = hit_sphere_old(*sph, ray, ray_origin);
-            if (temp_t_val > 0.0){
-                if ((t_val < 0.0 || temp_t_val < t_val)&& distance(ray_origin, ray_origin + ray * temp_t_val)> eps){
-                    *hit_shape = temp_shape;
-                    t_val = temp_t_val;
-                    return true;
-                } else {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        } else if (auto *tri = std::get_if<Triangle>(temp_shape)){
-            Vector3 p0 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).x);
-            Vector3 p1 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).y);
-            Vector3 p2 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).z);
-            if ( get_tri_intersect_old(p0, p1, p2, ray, ray_origin, eps, b_coord, temp_t_val)){
-                if ((t_val < 0.0 || temp_t_val < t_val)&& distance(ray_origin, ray_origin + ray * temp_t_val)> eps){
-                    *hit_shape = temp_shape;
-                    t_val = temp_t_val;
-                    return true;
-                } else {
-                    return false;
-                }
+        temp_t_val = hit_shape(bvh.shapes.at(0), ray, ray_origin, eps, uv);
+        if (temp_t_val > 0.0){
+            if ((t < 0.0 || temp_t_val < t)&& distance(ray_origin, ray_origin + ray * temp_t_val)> eps){
+                *hs = bvh.shapes.at(0);
+                t = temp_t_val;
+                return true;
             } else {
                 return false;
             }
         } else {
-            assert(false);
+            return false;
         }
     } else {
         bool l_hit = false, r_hit = false;
-        if (with_simd){
-            int hits = hit_boxes_simd(bvh, ray, ray_origin, eps, infinity<Real>());
-            if (hits == 3){
-                return false;
-            }
-            if (hits == 0){
-                l_hit = hit_bvh(*bvh.left, ray, ray_origin, eps, hit_shape, t_val, b_coord, with_simd);
-                r_hit = hit_bvh(*bvh.right, ray, ray_origin, eps, hit_shape, t_val, b_coord, with_simd);
-                return l_hit || r_hit;
-            } else if (hits==2){
-                return hit_bvh(*bvh.right, ray, ray_origin, eps, hit_shape, t_val, b_coord, with_simd);
-            }
-            else if (hits==1){
-                return hit_bvh(*bvh.left, ray, ray_origin, eps, hit_shape, t_val, b_coord, with_simd);
+        if (!hit_box(bvh, ray, ray_origin, t_min, t_max)){
+            return false;
+        } else {
+            l_hit = hit_bvh_old(*bvh.left, ray, ray_origin, eps, t_min, t_max, hs, t, uv);
+            r_hit = hit_bvh_old(*bvh.right, ray, ray_origin, eps, t_min, t_max, hs, t, uv);
+            return l_hit || r_hit;
+        }
+    }
+}
+
+bool hit_bvh(const AABB &bvh, const Vector3 &ray, const Vector3 &ray_origin, const Real eps, Real t_min, Real t_max,  Shape **hs, Real &t, Vector2 &uv, const bool with_simd){
+    if (!with_simd){
+        return hit_bvh_old(bvh, ray, ray_origin, eps, t_min, t_max, hs, t, uv);
+    }
+    // base case
+    if (bvh.shapes.size()==1){
+        Real temp_t_val;
+        temp_t_val = hit_shape(bvh.shapes.at(0), ray, ray_origin, eps, uv);
+        if (temp_t_val > 0.0){
+            if ((t < 0.0 || temp_t_val < t)&& distance(ray_origin, ray_origin + ray * temp_t_val)> eps){
+                *hs = bvh.shapes.at(0);
+                t = temp_t_val;
+                return true;
             } else {
                 return false;
             }
         } else {
-            if (!hit_box(bvh, ray, ray_origin, eps, infinity<Real>())){
-                return false;
-            } else {
-                l_hit = hit_bvh(*bvh.left, ray, ray_origin, eps, hit_shape, t_val, b_coord, with_simd);
-                r_hit = hit_bvh(*bvh.right, ray, ray_origin, eps, hit_shape, t_val, b_coord, with_simd);
-                return l_hit || r_hit;
-            }
+            return false;
+        }
+       // std::cout << "hit base" << std::endl;
+        // Real temp_t_val;
+        // Shape* temp_shape = bvh.shapes.at(0);
+        // if (auto *sph = std::get_if<Sphere>(temp_shape)){
+        //     temp_t_val = hit_sphere(*sph, ray, ray_origin);
+        //     if (temp_t_val > 0.0){
+        //         if ((t_val < 0.0 || temp_t_val < t_val)&& distance(ray_origin, ray_origin + ray * temp_t_val)> eps){
+        //             *hit_shape = temp_shape;
+        //             t_val = temp_t_val;
+        //             return true;
+        //         } else {
+        //             return false;
+        //         }
+        //     } else {
+        //         return false;
+        //     }
+        // } else if (auto *tri = std::get_if<Triangle>(temp_shape)){
+        //     Vector3 p0 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).x);
+        //     Vector3 p1 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).y);
+        //     Vector3 p2 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).z);
+        //     if ( get_tri_intersect(p0, p1, p2, ray, ray_origin, eps, b_coord, temp_t_val)){
+        //         if ((t_val < 0.0 || temp_t_val < t_val)&& distance(ray_origin, ray_origin + ray * temp_t_val)> eps){
+        //             *hit_shape = temp_shape;
+        //             t_val = temp_t_val;
+        //             return true;
+        //         } else {
+        //             return false;
+        //         }
+        //     } else {
+        //         return false;
+        //     }
+        // } else {
+        //     assert(false);
+        // }
+    } else {
+        bool l_hit = false, r_hit = false;
+        int hits = hit_boxes_simd(bvh, ray, ray_origin, t_min, t_max);
+        if (hits == 3){
+            return false;
+        }
+        if (hits == 0){
+            l_hit = hit_bvh(*bvh.left, ray, ray_origin, eps, t_min, t_max, hs, t, uv);
+            r_hit = hit_bvh(*bvh.right, ray, ray_origin, eps, t_min, t_max, hs, t, uv);
+            return l_hit || r_hit;
+        } else if (hits==2){
+            return hit_bvh(*bvh.right, ray, ray_origin, eps, t_min, t_max, hs, t, uv);
+        }
+        else if (hits==1){
+            return hit_bvh(*bvh.left, ray, ray_origin, eps, t_min, t_max, hs, t, uv);
+        } else {
+            return false;
         }
     }
 }
+
+bool hit_bvh(const AABB &bvh, const Vector3 &ray, const Vector3 &ray_origin, const Real eps,  Real t_min, Real t_max,  Shape **hs,Real &t, Vector2 &uv){
+    return hit_bvh(bvh, ray, ray_origin, eps, t_min, t_max, hs, t, uv, true);
+}
+

@@ -1,12 +1,12 @@
 #include "hw2.h"
 #include "parse_scene.h"
-#include "hw3_scene.h"
+#include "scene.h"
 #include "print_scene.h"
 #include "timer.h"
 #include "3rdparty/pcg.h"
 #include "parallel.h"
 #include "progressreporter.h"
-#include "bvh2.h"
+#include "bvh.h"
 
 
 

@@ -54,12 +54,11 @@ set(SRCS src/3rdparty/miniz.h
          src/compute_normals.cpp
          src/hw1.cpp
          src/hw2.cpp
-         src/core_types.h
-         src/bvh2.cpp
-         src/bvh2.h
+         src/bvh.cpp
+         src/bvh.h
          src/hw3.cpp
-         src/hw3_scene.h
-         src/hw3_scene.cpp
+         src/scene.h
+         src/scene.cpp
          src/hw4.cpp
          src/image.cpp
          src/main.cpp
