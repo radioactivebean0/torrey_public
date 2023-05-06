@@ -27,6 +27,13 @@ set(SRCS src/3rdparty/miniz.h
          src/3rdparty/tinyexr.h
          src/3rdparty/tinyply.h
          src/compute_normals.h
+         src/camera.h
+         src/camera.cpp
+         src/materials.h
+         src/materials.cpp
+         src/lights.h
+         src/shapes.h
+         src/shapes.cpp
          src/flexception.h
          src/hw1.h
          src/hw1_scenes.h
@@ -47,9 +54,12 @@ set(SRCS src/3rdparty/miniz.h
          src/compute_normals.cpp
          src/hw1.cpp
          src/hw2.cpp
-         src/bvh.cpp
-         src/bvh.h
+         src/core_types.h
+         src/bvh2.cpp
+         src/bvh2.h
          src/hw3.cpp
+         src/hw3_scene.h
+         src/hw3_scene.cpp
          src/hw4.cpp
          src/image.cpp
          src/main.cpp
