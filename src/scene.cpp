@@ -53,6 +53,12 @@ Scene::Scene(const ParsedScene &scene) :
             } else if (auto *tex = std::get_if<ParsedImageTexture>(&mirror->reflectance)){
                 materials.push_back(Material{.material_type = material_e::MirrorType, .reflectance = ImgTexture(tex->filename, tex->uscale, tex->vscale, tex->uoffset, tex->voffset)});
             }
+        } else if (auto *plastic = std::get_if<ParsedPlastic>(&parsed_mat)){
+            if (auto *tex = std::get_if<Vector3>(&plastic->reflectance)){
+                materials.push_back(Material{.material_type = material_e::PlasticType, .reflectance = SolidTexture{.reflectance = *tex}, .ref_index = plastic->eta});
+            } else if (auto *tex = std::get_if<ParsedImageTexture>(&plastic->reflectance)){
+                materials.push_back(Material{.material_type = material_e::PlasticType, .reflectance = ImgTexture(tex->filename, tex->uscale, tex->vscale, tex->uoffset, tex->voffset), .ref_index = plastic->eta});
+            }
         } else {
             assert(false);
         }
@@ -78,7 +84,7 @@ Vector3 get_diffuse_color(const Scene &scene, const Vector3 &pt, const Real eps,
         light_ray = normalize(pt-light_pos);
         t_shadow = -1.0;
         if (hit_bvh(scene.bvh, light_ray, light_pos, eps, eps, infinity<Real>(), &temp_shape, t_shadow, uv, with_simd)){
-            if (t_shadow > 0.0){
+            //if (t_shadow > 0.0){
                 hit_dist = distance(light_pos, light_pos + light_ray * t_shadow);
                 if (hit_dist > eps &&
                         hit_dist < (1-eps)*distance(light_pos, pt)){
@@ -89,17 +95,20 @@ Vector3 get_diffuse_color(const Scene &scene, const Vector3 &pt, const Real eps,
                     d_squared = distance_squared(pt, light_pos);
                     nl = dot(n, l);
                     if (nl < 0.0){
-                        nl = dot(Real(-1.0)*n,l);
+                        continue;
+                        //nl = dot(Real(-1.0)*n,l);
                     }
                     color += ((kd * nl)/c_PI)*(I/d_squared);
                 }
-            }
+            //}
         }
     }
     return color;
 }
 
-Vector3 get_mirror_color(const Scene &scene, const Vector3 &ray_in, const Vector3 &pt, const Real eps, const Vector3 &kd, const Vector3 &n, const bool with_simd){
+Vector3 get_mirror_color(const Scene &scene, const Vector3 &ray_in, const Vector3 &pt,
+                            const Real eps, const Vector3 &kd, const Vector3 &n,
+                            const bool with_simd, const bool shading_norms, const bool fresnel){
     // get reflected ray intersecting object and then get color
     Real t_reflect = -1.0;
     Vector3 ray_reflect =  ray_in - 2.0*dot(ray_in,n)*n;
@@ -107,12 +116,41 @@ Vector3 get_mirror_color(const Scene &scene, const Vector3 &ray_in, const Vector
     Vector2 uv;
     if (hit_bvh(scene.bvh, ray_reflect, pt, eps, eps, infinity<Real>(), &temp_shape, t_reflect, uv, with_simd)){
         Vector3 mirror_pt = pt + t_reflect * ray_reflect;
-        return kd*get_color(scene, ray_reflect, mirror_pt, eps, temp_shape, uv, with_simd);
-    } 
-    return kd*scene.background_color;
+        if (fresnel){
+            return (kd + (1.0-kd)* pow((1.0 - dot(n,ray_reflect)), 5)) * get_color(scene, ray_reflect, mirror_pt, eps, temp_shape, uv, with_simd, shading_norms, fresnel);
+        } else {
+            return kd * get_color(scene, ray_reflect, mirror_pt, eps, temp_shape, uv, with_simd, shading_norms, fresnel);
+        }
+    } else {
+        if (fresnel){
+            return (kd + (1.0-kd)* pow((1.0 - dot(n,ray_reflect)), 5)) * scene.background_color;
+        } else {
+            return kd*scene.background_color;
+        }
+    }
 }
 
-Vector3 get_color(const Scene &scene, const Vector3 &ray_in, const Vector3 &pt, const Real eps, Shape *shape, const Vector2 &uv, const bool with_simd){
+Vector3 get_plastic_color(const Scene &scene, const Vector3 &ray_in, const Vector3 &pt,
+                            const Real eps, const Vector3 &kd, const Vector3 &n,
+                            const bool with_simd, const bool shading_norms, const bool fresnel){
+    Real t_reflect = -1.0;
+    Vector3 ray_reflect =  ray_in - 2.0*dot(ray_in,n)*n;
+    Shape *temp_shape;
+    Vector2 uv;
+    const Vector3 F = kd + ((1.0 - kd) * pow(1 - dot(n,ray_reflect), 5));
+    if (hit_bvh(scene.bvh, ray_reflect, pt, eps, eps, infinity<Real>(), &temp_shape, t_reflect, uv, with_simd)){
+        Vector3 mirror_pt = pt + t_reflect * ray_reflect;
+        //std::cout << F << std::endl;
+        return (F*get_color(scene, ray_reflect, mirror_pt, eps, temp_shape, uv, with_simd, shading_norms, true) )+ ((Vector3{1.0,1.0,1.0}-F)*get_diffuse_color(scene, pt, eps, kd, n, true));
+    } else {
+        //return get_diffuse_color(scene,pt,eps,kd,n,true);//F * scene.background_color;
+        return (F*scene.background_color) + ((Vector3{1.0,1.0,1.0}-F)*get_diffuse_color(scene, pt, eps, kd, n, true));
+    }
+}
+
+Vector3 get_color(const Scene &scene, const Vector3 &ray_in, const Vector3 &pt,
+                    const Real eps, Shape *shape, const Vector2 &uv, const bool with_simd,
+                    const bool shading_norms, const bool fresnel){
     Vector3 kd, n;
     Vector2 uvt;
     if (auto *sph = std::get_if<Sphere>(shape)){ // get sphere color
@@ -121,7 +159,9 @@ Vector3 get_color(const Scene &scene, const Vector3 &ray_in, const Vector3 &pt, 
         kd = get_texture_kd(scene.materials.at(sph->material_id).reflectance, uvt);
         n = normalize(pt - sph->center);
         if (scene.materials.at(sph->material_id).material_type == material_e::MirrorType) {
-            return get_mirror_color(scene, ray_in, pt, eps, kd, n, with_simd);
+            return get_mirror_color(scene, ray_in, pt, eps, kd, n, with_simd, shading_norms, fresnel);
+        } else if (scene.materials.at(sph->material_id).material_type == material_e::PlasticType){
+            return get_plastic_color(scene, ray_in, pt, eps, kd, n, with_simd, shading_norms, fresnel);
         } else {
             return get_diffuse_color(scene, pt, eps, kd, n, with_simd);
         }
@@ -129,18 +169,37 @@ Vector3 get_color(const Scene &scene, const Vector3 &ray_in, const Vector3 &pt, 
         Vector3 p0 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).x);
         Vector3 p1 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).y);
         Vector3 p2 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).z);
-        n = normalize(cross(p1 - p0, p2 - p1));
         // calc uv
         uvt = triangle_uv(tri, uv);
+        // shading normals
+        if (shading_norms){
+            n = shading_norm(tri, uv);
+        }else {
+            n = normalize(cross(p1 - p0, p2 - p1));
+        }
+        if (dot(n, ray_in) > 0.0){
+            n = -n;
+        }
         kd = get_texture_kd(scene.materials.at(tri->mesh->material_id).reflectance, uvt);
         if (scene.materials.at(tri->mesh->material_id).material_type == material_e::MirrorType) {
-            return get_mirror_color(scene, ray_in, pt, eps, kd, n, with_simd);
+            return get_mirror_color(scene, ray_in, pt, eps, kd, n, with_simd, shading_norms, fresnel);
+        } else if (scene.materials.at(tri->mesh->material_id).material_type == material_e::PlasticType){
+            return get_plastic_color(scene, ray_in, pt, eps, kd, n, with_simd, shading_norms, fresnel);
         } else {
             return get_diffuse_color(scene, pt, eps, kd, n, with_simd);
         }
     } else {
         assert(false);
     }
+}
+Vector3 get_color(const Scene &scene, const Vector3 &ray_in, const Vector3 &pt,
+                    const Real eps, Shape *shape, const Vector2 &uv, const bool with_simd,
+                    const bool shading_norms){
+    return get_color(scene, ray_in, pt, eps, shape, uv, with_simd, shading_norms, false);
+}
+Vector3 get_color(const Scene &scene, const Vector3 &ray_in, const Vector3 &pt,
+                    const Real eps, Shape *shape, const Vector2 &uv, const bool with_simd){
+    return get_color(scene, ray_in, pt, eps, shape, uv, with_simd, false, false);
 }
 Vector3 get_color(const Scene &scene, const Vector3 &ray_in, const Vector3 &pt, const Real eps, Shape *shape, const Vector2 &uv){
     return get_color(scene, ray_in, pt, eps, shape, uv, true);
@@ -233,7 +292,6 @@ Vector3 get_color_nobvh(const Scene &scene, const Vector3 &ray_in, const Vector3
         n = normalize(pt - sph->center);
         if (scene.materials.at(sph->material_id).material_type == material_e::MirrorType) {
             return get_mirror_color_nobvh(scene, ray_in, pt, eps, kd, n);
-
         } else {
             return get_diffuse_color_nobvh(scene, pt, eps, kd, n);
         }

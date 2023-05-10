@@ -1,11 +1,13 @@
 #pragma once
 #include "vector.h"
+#include "image.h"
 #include <variant>
 #include <filesystem>
 
 enum material_e {
     DiffuseType,
-    MirrorType
+    MirrorType,
+    PlasticType
 };
 
 struct SolidTexture {
@@ -14,20 +16,16 @@ struct SolidTexture {
 struct ImgTexture {
     ImgTexture(const fs::path &path, const Real us, const Real vs, const Real uo, const Real vo);
     int width, height;
-    int channels;
     Real uoffset, voffset;
     Real uscale, vscale;
-    unsigned char* data;
+    Image3 data;
 };
 
 using Texture = std::variant<SolidTexture, ImgTexture>;
 
 struct Material {
     Texture reflectance;
-    material_e material_type;
-};
-struct HW2Material {
-    Vector3 reflectance;
+    Real ref_index;
     material_e material_type;
 };
 

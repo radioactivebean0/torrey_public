@@ -76,10 +76,10 @@ double hit_shape(const Shape* shape, const Vector3 &ray, const Vector3 &origin, 
 
 
 Vector2 sphere_uv(const Sphere* sphere, const Vector3 &pt){
-    Vector3 n_coords = normalize(pt - sphere->center);
+    Vector3 n_coords = (pt - sphere->center)/sphere->radius;
     Real theta = acos(-n_coords.y);
     Real phi = atan2(-n_coords.z, n_coords.x)+c_PI;
-    return Vector2{phi/c_TWOPI, theta/c_PI};
+    return Vector2{phi/c_TWOPI, 1.0-(theta/c_PI)};
 }
 
 Vector2 triangle_uv(const Triangle* triangle, const Vector2 &uv){
@@ -92,6 +92,21 @@ Vector2 triangle_uv(const Triangle* triangle, const Vector2 &uv){
         Vector2 u0 = triangle->mesh->uvs.at(indices.x);
         Vector2 u1 = triangle->mesh->uvs.at(indices.y);
         Vector2 u2 = triangle->mesh->uvs.at(indices.z);
-        return (1- uv.x - uv.y)*u0 + uv.x*u1 + uv.y * u2;
+        return (1.0- uv.x - uv.y)*u0 + uv.x*u1 + uv.y * u2;
+    }
+}
+
+Vector3 shading_norm(const Triangle* tri, const Vector2 &uv){
+    Vector3i indices = tri->mesh->indices.at(tri->face_index);
+    if (tri->mesh->normals.size()==0){
+        Vector3 p0 = tri->mesh->positions.at(indices.x);
+        Vector3 p1 = tri->mesh->positions.at(indices.y);
+        Vector3 p2 = tri->mesh->positions.at(indices.z);
+        return normalize(cross(p1 - p0, p2 - p1));
+    } else {
+        Vector3 n0 = tri->mesh->normals.at(indices.x);
+        Vector3 n1 = tri->mesh->normals.at(indices.y);
+        Vector3 n2 = tri->mesh->normals.at(indices.z);
+        return normalize((1.0- uv.x - uv.y)*n0 + uv.x*n1 + uv.y * n2);
     }
 }

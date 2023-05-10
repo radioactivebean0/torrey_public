@@ -400,11 +400,13 @@ bool hit_bvh(const AABB &bvh, const Vector3 &ray, const Vector3 &ray_origin, con
     // base case
     if (bvh.shapes.size()==1){
         Real temp_t_val;
-        temp_t_val = hit_shape(bvh.shapes.at(0), ray, ray_origin, eps, uv);
+        Vector2 temp_uv;
+        temp_t_val = hit_shape(bvh.shapes.at(0), ray, ray_origin, eps, temp_uv);
         if (temp_t_val > 0.0){
             if ((t < 0.0 || temp_t_val < t)&& distance(ray_origin, ray_origin + ray * temp_t_val)> eps){
                 *hs = bvh.shapes.at(0);
                 t = temp_t_val;
+                uv = temp_uv;
                 return true;
             } else {
                 return false;
@@ -412,40 +414,6 @@ bool hit_bvh(const AABB &bvh, const Vector3 &ray, const Vector3 &ray_origin, con
         } else {
             return false;
         }
-       // std::cout << "hit base" << std::endl;
-        // Real temp_t_val;
-        // Shape* temp_shape = bvh.shapes.at(0);
-        // if (auto *sph = std::get_if<Sphere>(temp_shape)){
-        //     temp_t_val = hit_sphere(*sph, ray, ray_origin);
-        //     if (temp_t_val > 0.0){
-        //         if ((t_val < 0.0 || temp_t_val < t_val)&& distance(ray_origin, ray_origin + ray * temp_t_val)> eps){
-        //             *hit_shape = temp_shape;
-        //             t_val = temp_t_val;
-        //             return true;
-        //         } else {
-        //             return false;
-        //         }
-        //     } else {
-        //         return false;
-        //     }
-        // } else if (auto *tri = std::get_if<Triangle>(temp_shape)){
-        //     Vector3 p0 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).x);
-        //     Vector3 p1 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).y);
-        //     Vector3 p2 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).z);
-        //     if ( get_tri_intersect(p0, p1, p2, ray, ray_origin, eps, b_coord, temp_t_val)){
-        //         if ((t_val < 0.0 || temp_t_val < t_val)&& distance(ray_origin, ray_origin + ray * temp_t_val)> eps){
-        //             *hit_shape = temp_shape;
-        //             t_val = temp_t_val;
-        //             return true;
-        //         } else {
-        //             return false;
-        //         }
-        //     } else {
-        //         return false;
-        //     }
-        // } else {
-        //     assert(false);
-        // }
     } else {
         bool l_hit = false, r_hit = false;
         int hits = hit_boxes_simd(bvh, ray, ray_origin, t_min, t_max);
