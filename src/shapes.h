@@ -11,6 +11,7 @@ struct HW2TriangleMesh {
 
 struct TriangleMesh {
     int material_id = -1;
+    int area_light_id = -1;
     std::vector<Vector3> positions;
     std::vector<Vector3i> indices;
     std::vector<Vector3> normals;
@@ -21,6 +22,7 @@ struct Sphere {
     Vector3 center;
     Real radius;
     int material_id;
+    int area_light_id;
 };
 
 struct Triangle{

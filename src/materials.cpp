@@ -19,21 +19,12 @@ Vector3 get_texture_kd(const Texture &texture, const Vector2 uv){
         Real y = Real(img->height) * modulo(img->vscale * uv.y + img->voffset, 1.0);
         int x1 = std::floor(x); int x2 = std::ceil(x);
         int y1 = std::floor(y); int y2 = std::ceil(y);
-        // if (x1 >= img->width){
-        //     return Vector3{0.0,1.0,1.0};
-        // }
-        // if (y1 >= img->height){
-        //                 return Vector3{0.0,1.0,1.0};
-        // }
+
         if (x2>=img->width){
-                   //     std::cout << x2 << std::endl;
-            x2 = 0;//modulo(x2, img->width-1);
+            x2 = 0;
         }
         if (y2 >= img->height){
-                   //     return Vector3{0.0,1.0,1.0};
-
-                      // std::cout << y2 << std::endl;
-            y2 = 0;//modulo(y2, img->height-1);
+            y2 = 0;
         }
         Vector3 q11 = img->data(x1,y1);
         Vector3 q21 = img->data(x2,y1);
@@ -42,7 +33,6 @@ Vector3 get_texture_kd(const Texture &texture, const Vector2 uv){
         Vector3 fxy1 = ((1.0 - (x - x1))/1 * q11) +( (x - Real(x1))/1 * q21);
         Vector3 fxy2 = ((1.0 - (x - x1))/1 * q12) +( (x - Real(x1))/1 * q22);
         return ((1.0 - (y - y1))/(1) * fxy1 )+ ((y - Real(y1))/(1) * fxy2);
-        //return Vector3{1-uv.x-uv.y, uv.x, uv.y};
     } else {
         assert(false);
     }
