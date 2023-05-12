@@ -29,33 +29,19 @@ Real get_union_aabb_surface(std::vector<std::shared_ptr<AABB>> &boxes, size_t st
     __m256d min_vec = _mm256_set_pd(boxes.at(start)->a.x, boxes.at(start)->a.y, boxes.at(start)->a.z, 0.0);
     __m256d max_vec = _mm256_set_pd(boxes.at(start)->b.x,boxes.at(start)->b.y,boxes.at(start)->b.z,0.0);
     __m256d tempa, tempb;
-    // Vector3 min_vec = boxes.at(start)->a;
-    // Vector3 max_vec = boxes.at(start)->b;
     for (int i = start+1; i < end; i++){
         tempa = _mm256_set_pd(boxes[i]->a.x, boxes[i]->a.y, boxes[i]->a.z, 0.0);
         tempb = _mm256_set_pd(boxes[i]->b.x, boxes[i]->b.y, boxes[i]->b.z, 0.0);
         min_vec = _mm256_min_pd(tempa, min_vec);
         max_vec = _mm256_max_pd(tempb, max_vec);
-        // min_vec = min(min_vec, boxes[i]->a);
-        // max_vec = max(max_vec, boxes[i]->b);
     }
     Real diag[4];
     min_vec = _mm256_sub_pd(max_vec, min_vec);
     _mm256_store_pd(diag, min_vec);
-   // Vector3 diag = max_vec - min_vec;
-   return 2 * (diag[3] * diag[2] + diag[3]*diag[1] + diag[2]*diag[1]);
-    //return 2 * (diag.x * diag.y + diag.x * diag.z + diag.y * diag.z);
+    return 2 * (diag[3] * diag[2] + diag[3]*diag[1] + diag[2]*diag[1]);
 }
 
 void get_bounds_aabb_list(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t end, Vector3 &a, Vector3 &b){
-    // Vector3 min_vec = boxes.at(start)->a;
-    // Vector3 max_vec = boxes.at(start)->b;
-    // for (int i = start+1; i < end; i++){
-    //     min_vec = min(min_vec, boxes[i]->a);
-    //     max_vec = max(max_vec, boxes[i]->b);
-    // }
-    // a = min_vec;
-    // b = max_vec;
     __m256d tempa, tempb;
     __m256d min_vec = _mm256_set_pd(boxes.at(start)->a.x, boxes.at(start)->a.y, boxes.at(start)->a.z, 0.0);
     __m256d max_vec = _mm256_set_pd(boxes.at(start)->b.x,boxes.at(start)->b.y,boxes.at(start)->b.z,0.0);
@@ -204,7 +190,6 @@ std::shared_ptr<AABB> build_sah_bvh_helper(std::vector<std::shared_ptr<AABB>> &b
             for (i = 1; i < NUM_BINS; i++){
                 std::nth_element(boxes.begin()+start, boxes.begin()+(chunksize*i), boxes.begin()+end, comparator);
             }
-            //std::sort(boxes.begin()+start, boxes.begin()+end, comparator);
             i = 0;
             while (i < NUM_BINS-1){
                 get_bounds_aabb_list(boxes, start+(chunksize*i), start+(i+1)*chunksize, chunks_a[i], chunks_b[i]);
@@ -226,7 +211,6 @@ std::shared_ptr<AABB> build_sah_bvh_helper(std::vector<std::shared_ptr<AABB>> &b
                     : (axis == 1) ? aabb_y_compare
                                     : aabb_z_compare;
     // sort subvector on chosen axis
-    //std::sort(boxes.begin()+start, boxes.begin()+end, comparator);
     std::nth_element(boxes.begin()+start, boxes.begin()+split_ind, boxes.begin()+end, comparator);
     // split apart and recurse
     node->left = build_sah_bvh_helper(boxes, start, split_ind);
@@ -350,7 +334,6 @@ int hit_boxes_simd(const AABB &box, const Vector3 &ray, const Vector3 &lookfrom,
 }
 
 bool hit_box(const AABB &box, const Vector3 &ray, const Vector3 &lookfrom, Real t_min, Real t_max){
-    //return hit_box_simd(box, ray, lookfrom, t_min, t_max);
     for (int d = 0; d < 3; d++) {
         Real invD = 1.0 / ray[d];
         auto t0 = (box.a[d] - lookfrom[d]) * invD;

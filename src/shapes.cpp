@@ -42,9 +42,6 @@ double get_tri_intersect(const Vector3 &p0, const Vector3 &p1, const Vector3 &p2
         if (t > eps){
             uv.x = m;
             uv.y = n;
-            // coordinate.x = 1-m-n;
-            // coordinate.y = m;
-            // coordinate.z = n; 
             return t;
         } else {
             return -1.0;

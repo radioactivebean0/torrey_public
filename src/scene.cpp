@@ -105,23 +105,20 @@ Vector3 get_diffuse_color(const Scene &scene, const Vector3 &pt, const Real eps,
             light_ray = normalize(pt-light_pos);
             t_shadow = -1.0;
             if (hit_bvh(scene.bvh, light_ray, light_pos, eps, eps, infinity<Real>(), &temp_shape, t_shadow, uv, with_simd)){
-                //if (t_shadow > 0.0){
-                    hit_dist = distance(light_pos, light_pos + light_ray * t_shadow);
-                    if (hit_dist > eps &&
-                            hit_dist < (1-eps)*distance(light_pos, pt)){
+                hit_dist = distance(light_pos, light_pos + light_ray * t_shadow);
+                if (hit_dist > eps &&
+                        hit_dist < (1-eps)*distance(light_pos, pt)){
+                    continue;
+                } else {
+                    l = Real(-1.0) * light_ray;
+                    I = light->intensity;
+                    d_squared = distance_squared(pt, light_pos);
+                    nl = dot(n, l);
+                    if (nl < 0.0){
                         continue;
-                    } else {
-                        l = Real(-1.0) * light_ray;
-                        I = light->intensity;
-                        d_squared = distance_squared(pt, light_pos);
-                        nl = dot(n, l);
-                        if (nl < 0.0){
-                            continue;
-                            //nl = dot(Real(-1.0)*n,l);
-                        }
-                        color += ((kd * nl)/c_PI)*(I/d_squared);
                     }
-                //}
+                    color += ((kd * nl)/c_PI)*(I/d_squared);
+                }
             }
         } else if (auto *alight = std::get_if<AreaLight>(&scene.lights.at(lit))){
             // do area light sampling here
@@ -133,7 +130,6 @@ Vector3 get_diffuse_color(const Scene &scene, const Vector3 &pt, const Real eps,
                 light_ray = normalize(pt-light_pos);
                 t_shadow = -1.0;
                 if (hit_bvh(scene.bvh, light_ray, light_pos, eps, eps, infinity<Real>(), &temp_shape, t_shadow, uv, with_simd)){
-                //if (t_shadow > 0.0){
                     hit_dist = distance(light_pos, light_pos + light_ray * t_shadow);
                     if (hit_dist > eps &&
                             hit_dist < (1-eps)*distance(light_pos, pt)){
@@ -166,7 +162,6 @@ Vector3 get_diffuse_color(const Scene &scene, const Vector3 &pt, const Real eps,
                 light_ray = normalize(pt-light_pos);
                 t_shadow = -1.0;
                 if (hit_bvh(scene.bvh, light_ray, light_pos, eps, eps, infinity<Real>(), &temp_shape, t_shadow, uv, with_simd)){
-                //if (t_shadow > 0.0){
                     hit_dist = distance(light_pos, light_pos + light_ray * t_shadow);
                     if (hit_dist > eps &&
                         hit_dist < (1-eps)*distance(light_pos, pt)){
@@ -192,12 +187,9 @@ Vector3 get_diffuse_color(const Scene &scene, const Vector3 &pt, const Real eps,
                         color += (((kd * nsl)/c_PI)*((I*nxl)/d_squared))*(0.5*length(cross(p2-p0,p1-p0)));
                     }
                 }
-
-                
             } else {
                 assert(false);
             }
-
         } else {
             assert(false);
         }
@@ -242,10 +234,8 @@ Vector3 get_plastic_color(const Scene &scene, const Vector3 &ray_in, const Vecto
     const Real F = fnot + ((1.0 - fnot) * pow(1 - dot(n,ray_reflect), 5));
     if (hit_bvh(scene.bvh, ray_reflect, pt, eps, eps, infinity<Real>(), &temp_shape, t_reflect, uv, with_simd)){
         Vector3 mirror_pt = pt + t_reflect * ray_reflect;
-        //std::cout << F << std::endl;
         return (F*radiance(scene, ray_reflect, mirror_pt, eps, temp_shape, uv, with_simd, shading_norms, true, pcg_state) )+ ((Vector3{1.0,1.0,1.0}-F)*get_diffuse_color(scene, pt, eps, kd, n, true, pcg_state));
     } else {
-        //return get_diffuse_color(scene,pt,eps,kd,n,true);//F * scene.background_color;
         return (F*scene.background_color) + ((Vector3{1.0,1.0,1.0}-F)*get_diffuse_color(scene, pt, eps, kd, n, true, pcg_state));
     }
 }
