@@ -95,7 +95,7 @@ Real get_cost_ranges(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, si
     return (get_union_aabb_surface(boxes, start, mid)*(mid-start))+(get_union_aabb_surface(boxes, mid, end)*(end-mid))/get_union_aabb_surface(boxes, start, end);
 }
 
-std::shared_ptr<AABB> build_sah_bvh_helper(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t end){
+std::shared_ptr<AABB> build_sah_bvh_helper(std::vector<std::shared_ptr<AABB>> &boxes, size_t start, size_t end, int *bvhsize){
     // base cases
     if (end-start == 1) {
         return boxes.at(start);
@@ -130,6 +130,7 @@ std::shared_ptr<AABB> build_sah_bvh_helper(std::vector<std::shared_ptr<AABB>> &b
             node->right = boxes.at(start);
         }
         set_surrounding_aabb(node, node->left, node->right);
+        *bvhsize += 1;
         return node;
     }
 
@@ -213,9 +214,10 @@ std::shared_ptr<AABB> build_sah_bvh_helper(std::vector<std::shared_ptr<AABB>> &b
     // sort subvector on chosen axis
     std::nth_element(boxes.begin()+start, boxes.begin()+split_ind, boxes.begin()+end, comparator);
     // split apart and recurse
-    node->left = build_sah_bvh_helper(boxes, start, split_ind);
-    node->right = build_sah_bvh_helper(boxes, split_ind, end);
+    node->left = build_sah_bvh_helper(boxes, start, split_ind, bvhsize);
+    node->right = build_sah_bvh_helper(boxes, split_ind, end, bvhsize);
     set_surrounding_aabb(node, node->left, node->right);
+    *bvhsize += 1;
     return node;
 }
 
@@ -275,7 +277,8 @@ std::shared_ptr<AABB> build_bvh_helper(std::vector<std::shared_ptr<AABB>> &boxes
     }
 }
 
-AABB build_bvh(std::vector<Shape> &shapes, int split_method = 0){
+
+AABB build_bvh(std::vector<Shape> &shapes, int split_method = 0, int *bvhsize = nullptr){
     std::vector<std::shared_ptr<AABB>> boxes;
     Vector3 p0, p1, p2;
 
@@ -298,10 +301,33 @@ AABB build_bvh(std::vector<Shape> &shapes, int split_method = 0){
         boxes.push_back(box);
     }
     if (split_method == 2){
-        return *build_sah_bvh_helper(boxes, 0, boxes.size());
+        *bvhsize = boxes.size();
+        return *build_sah_bvh_helper(boxes, 0, boxes.size(), bvhsize);
     }
     return *build_bvh_helper(boxes, 0, boxes.size(), split_method);
 }
+AABB build_bvh(std::vector<Shape> &shapes, int split_method = 0){
+    int dummy = 0;
+    return build_bvh(shapes, split_method, &dummy);
+}
+int flatten_bvh(AABB &box, compact_AABB *root, int *offset){
+    compact_AABB *cnode = &root[*offset];
+    cnode->a = box.a;
+    cnode->b = box.b;
+    int myoffs = (*offset)++;
+    //std::cout << box.shapes.size() << std::endl;
+    if (box.shapes.size()==1){
+        cnode->shape = box.shapes.at(0);
+        cnode->next = -1;
+    } else {
+        cnode->shape = nullptr;
+        flatten_bvh(*box.left, root, offset);
+        cnode->next = flatten_bvh(*box.right, root, offset);
+    }
+    cnode->axis = box.axis;
+    return myoffs;
+}
+
 int hit_boxes_simd(const AABB &box, const Vector3 &ray, const Vector3 &lookfrom, Real t_min, Real t_max){
     __m128d t0, t1, m128_lookfrom, invD, vect_min, vect_max, hitacc, temp;
     vect_min = _mm_set_pd1(t_min);
@@ -377,6 +403,7 @@ bool hit_bvh_old(const AABB &bvh, const Vector3 &ray, const Vector3 &ray_origin,
 }
 
 bool hit_bvh(const AABB &bvh, const Vector3 &ray, const Vector3 &ray_origin, const Real eps, Real t_min, Real t_max,  Shape **hs, Real &t, Vector2 &uv, const bool with_simd){
+    //std::cout << "hitbvh" << std::endl;
     if (!with_simd){
         return hit_bvh_old(bvh, ray, ray_origin, eps, t_min, t_max, hs, t, uv);
     }
@@ -422,3 +449,115 @@ bool hit_bvh(const AABB &bvh, const Vector3 &ray, const Vector3 &ray_origin, con
     return hit_bvh(bvh, ray, ray_origin, eps, t_min, t_max, hs, t, uv, true);
 }
 
+inline int hit_cboxes_simd(const Vector3 &la, const Vector3 &lb, const Vector3 &ra, const Vector3 &rb,
+        const __m128d lookfromx, const __m128d lookfromy, const __m128d lookfromz,
+        const __m128d invdx, const __m128d invdy, const __m128d invdz, const Vector3 invD,
+        __m128d vect_min, __m128d vect_max){
+    __m128d hitacc = _mm_setzero_pd();
+    __m128d t0, t1, temp;
+    int res;
+    t0 = _mm_set_pd(la[0], ra[0]);
+    t1 = _mm_set_pd(lb[0], rb[0]);
+    t0 = _mm_sub_pd(t0, lookfromx);
+    t1 = _mm_sub_pd(t1, lookfromx);
+    t0 = _mm_mul_pd(t0, invdx);
+    t1 = _mm_mul_pd(t1, invdx);
+    if (invD[0] < 0.0){
+        std::swap(t0, t1);
+    }
+    vect_min = _mm_max_pd(t0, vect_min);
+    vect_max = _mm_min_pd(t1, vect_max);
+    temp = _mm_cmplt_pd(vect_max, vect_min);
+    hitacc = _mm_or_pd(temp, hitacc);
+    res = _mm_movemask_pd(hitacc);
+    if (res == 3){
+        return res;
+    }
+    t0 = _mm_set_pd(la[1], ra[1]);
+    t1 = _mm_set_pd(lb[1], rb[1]);
+    t0 = _mm_sub_pd(t0, lookfromy);
+    t1 = _mm_sub_pd(t1, lookfromy);
+    t0 = _mm_mul_pd(t0, invdy);
+    t1 = _mm_mul_pd(t1, invdy);
+    if (invD[1] < 0.0){
+        std::swap(t0, t1);
+    }
+    vect_min = _mm_max_pd(t0, vect_min);
+    vect_max = _mm_min_pd(t1, vect_max);
+    temp = _mm_cmplt_pd(vect_max, vect_min);
+    hitacc = _mm_or_pd(temp, hitacc);
+    res = _mm_movemask_pd(hitacc);
+    if (res == 3){
+        return res;
+    }
+    t0 = _mm_set_pd(la[2], ra[2]);
+    t1 = _mm_set_pd(lb[2], rb[2]);
+    t0 = _mm_sub_pd(t0, lookfromz);
+    t1 = _mm_sub_pd(t1, lookfromz);
+    t0 = _mm_mul_pd(t0, invdz);
+    t1 = _mm_mul_pd(t1, invdz);
+    if (invD[2] < 0.0){
+        std::swap(t0, t1);
+    }
+    vect_min = _mm_max_pd(t0, vect_min);
+    vect_max = _mm_min_pd(t1, vect_max);
+    temp = _mm_cmplt_pd(vect_max, vect_min);
+    hitacc = _mm_or_pd(temp, hitacc);
+    res = _mm_movemask_pd(hitacc);
+    return res;
+}
+
+bool hit_cbvh(const compact_AABB *cbvh, const Vector3 &ray, const Vector3 &ray_origin, const Real eps, Real t_min, Real t_max, Shape **hs,  Real &t, Vector2 &uv){
+    bool hit = false;
+    __m128d vect_min = _mm_set_pd1(t_min);
+    __m128d vect_max = _mm_set_pd1(t_max);
+    const __m128d lookfromx = _mm_set_pd1(ray_origin.x);
+    const __m128d lookfromy = _mm_set_pd1(ray_origin.y);
+    const __m128d lookfromz = _mm_set_pd1(ray_origin.z);
+    const Vector3 invD = 1.0/ray;
+    const __m128d invdx = _mm_set_pd1(invD.x);
+    const __m128d invdy = _mm_set_pd1(invD.y);
+    const __m128d invdz = _mm_set_pd1(invD.z);
+    int toVisitOffset = 0, currentNodeIndex = 0;
+    int nodesToVisit[128];
+    while (true){
+        const compact_AABB *node = &cbvh[currentNodeIndex];
+        if (node->next ==-1){
+            Real temp_t_val;
+            Vector2 temp_uv;
+            temp_t_val = hit_shape(node->shape, ray, ray_origin, eps, temp_uv);
+            if (temp_t_val > 0.0){
+                if ((t < 0.0 || temp_t_val < t)&& distance(ray_origin, ray_origin + ray * temp_t_val)> eps){
+                    *hs = node->shape;
+                    t = temp_t_val;
+                    uv = temp_uv;
+                    hit = true;
+                }
+            }
+            if (toVisitOffset == 0) break;
+            currentNodeIndex = nodesToVisit[--toVisitOffset];
+        } else {
+            int hits = hit_cboxes_simd(cbvh[currentNodeIndex+1].a, cbvh[currentNodeIndex+1].b, cbvh[node->next].a,cbvh[node->next].b,
+                                        lookfromx, lookfromy, lookfromz, invdx, invdy, invdz, invD, vect_min, vect_max);
+            if (hits == 3){
+                //std::cout << "hit none" << std::endl;
+                if (toVisitOffset == 0) break;
+                currentNodeIndex = nodesToVisit[--toVisitOffset];
+            }
+            else if (hits == 0){
+                //std::cout << "hit both" << std::endl;
+                nodesToVisit[toVisitOffset++] = currentNodeIndex + 1;
+                currentNodeIndex = node->next;
+            } else if (hits==2){
+                //std::cout << "hit left" << std::endl;
+                currentNodeIndex = node->next;
+            } else if (hits==1){
+                //std::cout << "hit right" << std::endl;
+                currentNodeIndex +=1;
+            } else {
+                assert(false);
+            }
+        }
+    }
+    return hit;
+}

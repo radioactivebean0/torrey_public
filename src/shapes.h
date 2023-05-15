@@ -42,6 +42,13 @@ struct AABB {
     std::shared_ptr<AABB> left, right;
 };
 
+struct compact_AABB {
+    Vector3 a, b;
+    uint8_t axis;
+    int next;
+    Shape* shape;
+};
+
 struct WideAABB {
     WideAABB();
     WideAABB(std::shared_ptr<WideAABB> aabb);
