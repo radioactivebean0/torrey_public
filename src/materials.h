@@ -7,7 +7,10 @@
 enum material_e {
     DiffuseType,
     MirrorType,
-    PlasticType
+    PlasticType,
+    PhongType,
+    BlinnPhongType,
+    BlinnPhongMicrofacetType
 };
 
 struct SolidTexture {
@@ -26,6 +29,7 @@ using Texture = std::variant<SolidTexture, ImgTexture>;
 struct Material {
     Texture reflectance;
     Real ref_index;
+    Real exponent;
     material_e material_type;
 };
 
