@@ -52,3 +52,4 @@ Vector3 radiance_v2(const Scene &scene, const Vector3 &ray_in, const Vector3 &pt
                     const Real eps, Shape *shape, const Vector2 &uv, pcg32_state &pcg_state);
 
 Vector3 path_trace(const Scene &scene, const Vector3 &ray, const Vector3 &ray_origin, pcg32_state &pcg_state, int max_depth);
+Vector3 mis_path_trace(const Scene &scene, const Vector3 &ray, const Vector3 &ray_origin, pcg32_state &pcg_state, int max_depth);
