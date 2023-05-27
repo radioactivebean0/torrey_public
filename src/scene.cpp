@@ -748,11 +748,11 @@ bool brdf_eval(const Scene &scene, const Vector3 &ray, const Vector3 &omeganot, 
     if (mat == material_e::PhongType) { // phong material
         const Vector3 ray_reflect = ray - 2.0*dot(ray, sn)*sn;
         Real exponent = scene.materials.at(mat_id).exponent;
-        Real nwo = dot(sn, omeganot);
-        if (nwo <=0.0){
-            return false;
-        }
-        nwo = dot(ray_reflect, omeganot);
+        // Real nwo = dot(sn, omeganot);
+        // if (nwo <=0.0){
+        //     return false;
+        // }
+        Real nwo = dot(ray_reflect, omeganot);
         if (nwo <= 0.0){
             return false;
         }
@@ -765,9 +765,9 @@ bool brdf_eval(const Scene &scene, const Vector3 &ray, const Vector3 &omeganot, 
         const Vector3 halfvec = normalize(-ray + omeganot);
         Real exponent = scene.materials.at(mat_id).exponent;
         Vector3 omeganot = ray - 2.0*dot(ray, halfvec)*halfvec;
-        if (dot(sn,omeganot)<0.0){
-            return false;
-        }
+        // if (dot(sn,omeganot)<0.0){
+        //     return false;
+        // }
         Vector3 fh = kd + (1.0-kd)*pow(1-dot(halfvec,omeganot),5);
         pdf = ((exponent+1.0)*pow(dot(sn,halfvec),exponent))/(c_TWOPI*4.0*dot(omeganot,halfvec));
         Real normc = (exponent + 2)/(c_FOURPI*(2.0 - pow(2.0, -exponent/2.0)));
@@ -776,9 +776,9 @@ bool brdf_eval(const Scene &scene, const Vector3 &ray, const Vector3 &omeganot, 
     } else if (mat == material_e::BlinnPhongMicrofacetType){
         const Vector3 halfvec = normalize(-ray + omeganot);
         Real exponent = scene.materials.at(mat_id).exponent;
-        if (dot(sn,omeganot)<0.0){
-            return false;
-        }
+        // if (dot(sn,omeganot)<0.0){
+        //     return false;
+        // }
         pdf = ((exponent+1.0)*pow(dot(sn,halfvec),exponent))/(c_TWOPI*4.0*dot(omeganot,halfvec));
         Vector3 fh = kd + (1.0-kd)*pow(1-dot(halfvec,omeganot),5);
         Real d = (exponent + 2)/(c_TWOPI)*pow(dot(sn,halfvec),exponent);
@@ -802,9 +802,9 @@ bool brdf_eval(const Scene &scene, const Vector3 &ray, const Vector3 &omeganot, 
     } else {        // scattering, cosine hemisphere sampling and diffuse
         const Vector3 &scatter = omeganot;
         Real nwo = dot(sn,scatter);
-        if (nwo <= 0.0){
-            return false;
-        }
+        // if (nwo <= 0.0){
+        //     return false;
+        // }
         pdf = (dot(gn,scatter)*c_INVPI);
         value = (kd*nwo*c_INVPI);
         return true;
@@ -816,7 +816,7 @@ Vector3 light_sample(const Scene &scene, const Vector3 &ray, const Vector3 &pt, 
     Vector3 l,I;
     Vector3 color{0.0,0.0,0.0};
     Vector2 uv;
-    int lit = (int) next_pcg32_real<Real>(pcg_state)*scene.lights.size();
+    int lit = next_pcg32_real<Real>(pcg_state)*scene.lights.size();
     if (auto *alight = std::get_if<AreaLight>(&scene.lights.at(lit))){
         if (auto *sph = std::get_if<Sphere>(&scene.shapes.at(alight->shape_idx))){
             // sample a point on the sphere
