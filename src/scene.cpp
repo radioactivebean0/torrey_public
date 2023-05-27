@@ -802,9 +802,9 @@ bool brdf_eval(const Scene &scene, const Vector3 &ray, const Vector3 &omeganot, 
     } else {        // scattering, cosine hemisphere sampling and diffuse
         const Vector3 &scatter = omeganot;
         Real nwo = dot(sn,scatter);
-        // if (nwo <= 0.0){
-        //     return false;
-        // }
+        if (nwo <= 0.0){
+            return false;
+        }
         pdf = (dot(gn,scatter)*c_INVPI);
         value = (kd*nwo*c_INVPI);
         return true;
