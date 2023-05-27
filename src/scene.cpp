@@ -703,7 +703,6 @@ Vector3 brdf_sample(const Scene &scene, const Vector3 &ray, const material_e mat
         Vector3 s = cross(t,ray_reflect);
         Vector3 omeganot = scatter.x*s + scatter.y*t + scatter.z*ray_reflect;
         specular = 0;
-        //pdf = ((exponent+1)*c_INVTWOPI*(pow(dot(ray_reflect, omeganot), exponent)));
         return omeganot;
     } else if (mat == material_e::BlinnPhongType){ // blinn phong
         Real exponent = scene.materials.at(mat_id).exponent;
@@ -716,11 +715,8 @@ Vector3 brdf_sample(const Scene &scene, const Vector3 &ray, const material_e mat
         Vector3 s = cross(t,sn);
         Vector3 halfvec = scatter.x*s + scatter.y*t + scatter.z*sn;
         specular = 0;
-        return halfvec;
-        //Vector3 omeganot = ray - 2.0*dot(ray, halfvec)*halfvec;
-        //specular = 0;
-        //pdf = ((exponent+1.0)*pow(dot(sn,halfvec),exponent))/(c_TWOPI*4.0*dot(omeganot,halfvec));
-        //return omeganot;
+        Vector3 omeganot = ray - 2.0*dot(ray, halfvec)*halfvec;
+        return omeganot;
     } else if (mat == material_e::BlinnPhongMicrofacetType){
         Real exponent = scene.materials.at(mat_id).exponent;
         Vector3 scatter = rand_phong_cos(pcg_state, exponent);
@@ -732,10 +728,8 @@ Vector3 brdf_sample(const Scene &scene, const Vector3 &ray, const material_e mat
         Vector3 s = cross(t,sn);
         Vector3 halfvec = scatter.x*s + scatter.y*t + scatter.z*sn;
         specular = 0;
-        return halfvec;
-        // Vector3 omeganot = ray - 2.0*dot(ray, halfvec)*halfvec;
-        // pdf = ((exponent+1.0)*pow(dot(sn,halfvec),exponent))/(c_TWOPI*4.0*dot(omeganot,halfvec));
-        // return omeganot;
+        Vector3 omeganot = ray - 2.0*dot(ray, halfvec)*halfvec;
+        return omeganot;
     } else {        // scattering, cosine hemisphere sampling and diffuse
         Vector3 scatter = rand_cos(pcg_state);
         Vector3 a = Vector3{1.0,0.0,0.0};
@@ -746,48 +740,30 @@ Vector3 brdf_sample(const Scene &scene, const Vector3 &ray, const material_e mat
         Vector3 s = cross(t,gn);
         Vector3 bounce = scatter.x*s + scatter.y*t + scatter.z*gn;
         specular = 0;
-        //pdf = (dot(gn,bounce)*c_INVPI);
         return bounce;
     }
 }
 
-bool brdf_eval(const Scene &scene, const Vector3 &ray, const Vector3 &sampleomega, const material_e mat, const int mat_id, const Vector3 &sn, const Vector3 &gn, const Vector3 &kd, pcg32_state &pcg_state, Vector3 &value, Real &pdf, Vector3 &bounce){
+bool brdf_eval(const Scene &scene, const Vector3 &ray, const Vector3 &omeganot, const material_e mat, const int mat_id, const Vector3 &sn, const Vector3 &gn, const Vector3 &kd, pcg32_state &pcg_state, Vector3 &value, Real &pdf){
     if (mat == material_e::PhongType) { // phong material
         const Vector3 ray_reflect = ray - 2.0*dot(ray, sn)*sn;
         Real exponent = scene.materials.at(mat_id).exponent;
-        // Vector3 scatter = rand_phong_cos(pcg_state, exponent);
-        // Vector3 a = Vector3{1.0,0.0,0.0};
-        // if (abs(ray_reflect.x) > 0.9){
-        //     a = Vector3{0.0,1.0,0.0};
-        // }
-        // Vector3 t = normalize(cross(a,ray_reflect));
-        // Vector3 s = cross(t,ray_reflect);
-        // Vector3 omeganot = scatter.x*s + scatter.y*t + scatter.z*ray_reflect;
-        Real nwo = dot(sn, sampleomega);
-        if (nwo < 0.0){
+        Real nwo = dot(sn, omeganot);
+        if (nwo <=0.0){
             return false;
         }
-        nwo = dot(ray_reflect, sampleomega);
-        if (nwo < 0.0){
+        nwo = dot(ray_reflect, omeganot);
+        if (nwo <= 0.0){
             return false;
         }
         nwo = pow(nwo, exponent);
         value = (kd*nwo*((exponent+1)*c_INVTWOPI));
-        pdf = ((exponent+1)*c_INVTWOPI*(pow(dot(ray_reflect, sampleomega), exponent)));
+        pdf = ((exponent+1)*c_INVTWOPI*(pow(dot(ray_reflect, omeganot), exponent)));
         return true;
-        //return emission + (kd*nwo*((exponent+1)*c_INVTWOPI))*path_trace(scene, omeganot, pt, pcg_state, max_depth-1)/((exponent+1)*c_INVTWOPI*(pow(dot(ray_reflect, omeganot), exponent)));
     } else if (mat == material_e::BlinnPhongType){ // blinn phong
         // sample omega is half vec
-        const Vector3 &halfvec = sampleomega;
+        const Vector3 halfvec = normalize(-ray + omeganot);
         Real exponent = scene.materials.at(mat_id).exponent;
-        // Vector3 scatter = rand_phong_cos(pcg_state, exponent);
-        // Vector3 a = Vector3{1.0,0.0,0.0};
-        // if (abs(sn.x) > 0.9){
-        //     a = Vector3{0.0,1.0,0.0};
-        // }
-        // Vector3 t = normalize(cross(a,sn));
-        // Vector3 s = cross(t,sn);
-        // Vector3 halfvec = scatter.x*s + scatter.y*t + scatter.z*sn;
         Vector3 omeganot = ray - 2.0*dot(ray, halfvec)*halfvec;
         if (dot(sn,omeganot)<0.0){
             return false;
@@ -796,21 +772,10 @@ bool brdf_eval(const Scene &scene, const Vector3 &ray, const Vector3 &sampleomeg
         pdf = ((exponent+1.0)*pow(dot(sn,halfvec),exponent))/(c_TWOPI*4.0*dot(omeganot,halfvec));
         Real normc = (exponent + 2)/(c_FOURPI*(2.0 - pow(2.0, -exponent/2.0)));
         value = normc*fh*pow(dot(sn,halfvec),exponent);
-        bounce = omeganot;
         return true;
-        //return emission + normc*fh*pow(dot(sn,halfvec),exponent)*path_trace(scene, omeganot, pt, pcg_state, max_depth-1)/pdf;
     } else if (mat == material_e::BlinnPhongMicrofacetType){
-        const Vector3 &halfvec = sampleomega;
+        const Vector3 halfvec = normalize(-ray + omeganot);
         Real exponent = scene.materials.at(mat_id).exponent;
-        // Vector3 scatter = rand_phong_cos(pcg_state, exponent);
-        // Vector3 a = Vector3{1.0,0.0,0.0};
-        // if (abs(sn.x) > 0.9){
-        //     a = Vector3{0.0,1.0,0.0};
-        // }
-        // Vector3 t = normalize(cross(a,sn));
-        // Vector3 s = cross(t,sn);
-        // Vector3 halfvec = scatter.x*s + scatter.y*t + scatter.z*sn;
-        Vector3 omeganot = ray - 2.0*dot(ray, halfvec)*halfvec;
         if (dot(sn,omeganot)<0.0){
             return false;
         }
@@ -833,31 +798,99 @@ bool brdf_eval(const Scene &scene, const Vector3 &ray, const Vector3 &sampleomeg
         }
         G = Gnot*Gi;
         value = (fh*d*G)/(4*dot(sn,-ray));
-        bounce = omeganot;
         return true;
-        //return emission + (fh*d*G)/(4*dot(sn,-ray)) *path_trace(scene, omeganot, pt, pcg_state, max_depth-1)/pdf;
     } else {        // scattering, cosine hemisphere sampling and diffuse
-        const Vector3 &scatter = sampleomega;
-        // Vector3 scatter = rand_cos(pcg_state);
-        // Vector3 a = Vector3{1.0,0.0,0.0};
-        // if (abs(gn.x) > 0.9){
-        //     a = Vector3{0.0,1.0,0.0};
-        // }
-        // Vector3 t = normalize(cross(a,gn));
-        // Vector3 s = cross(t,gn);
-        // Vector3 bounce = scatter.x*s + scatter.y*t + scatter.z*gn;
+        const Vector3 &scatter = omeganot;
         Real nwo = dot(sn,scatter);
-        if (nwo < 0.0){
+        if (nwo <= 0.0){
             return false;
         }
         pdf = (dot(gn,scatter)*c_INVPI);
         value = (kd*nwo*c_INVPI);
         return true;
-        //return emission + (kd*nwo*c_INVPI)*(path_trace(scene, bounce, pt, pcg_state, max_depth-1))/(dot(gn,bounce)*c_INVPI);
     }
 }
+//pdf -1.0 means no hit;
+Vector3 light_sample(const Scene &scene, const Vector3 &ray, const Vector3 &pt, const Real &eps, const material_e mat, const int mat_id, const Vector3 &sn, const Vector3 &gn, pcg32_state &pcg_state){
+    Vector3 light_pos, light_ray;
+    Vector3 l,I;
+    Vector3 color{0.0,0.0,0.0};
+    Vector2 uv;
+    int lit = (int) next_pcg32_real<Real>(pcg_state)*scene.lights.size();
+    if (auto *alight = std::get_if<AreaLight>(&scene.lights.at(lit))){
+        if (auto *sph = std::get_if<Sphere>(&scene.shapes.at(alight->shape_idx))){
+            // sample a point on the sphere
+            Real theta = acos(1.0-(2.0*next_pcg32_real<double>(pcg_state)));
+            Real phi = c_TWOPI * next_pcg32_real<double>(pcg_state);
+            light_pos = sph->center + Vector3{sph->radius*sin(theta)*cos(phi), sph->radius*sin(theta)*sin(phi),sph->radius*cos(theta)};
+            light_ray = normalize(pt-light_pos);
+            return -light_ray;
+        } else if (auto *tri = std::get_if<Triangle>(&scene.shapes.at(alight->shape_idx))){
+            Vector3 p0 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).x);
+            Vector3 p1 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).y);
+            Vector3 p2 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).z);
+            Real u1 = next_pcg32_real<double>(pcg_state);
+            Real u2 = next_pcg32_real<double>(pcg_state);
+            Real b1 = 1 - sqrt(u1);
+            Real b2 = u2 * sqrt(u1);
+            light_pos =(1-b1-b2)*p0 + b1*p1 + b2*p2;
+            light_ray = normalize(pt-light_pos);
+            return -light_ray;
+        } else {
+            assert(false);
+        }
+    } else {
+        assert (false);
+    }
+}
+
+Real light_pdf(const Scene &scene, const Vector3 &omeganot, const Vector3 &pt){
+    Real d_squared;
+    Vector2 uv;
+    const Real eps = 0.000001;
+    for (int lit = 0; lit < scene.lights.size(); lit++){ // iterate all lights
+        if (auto *alight = std::get_if<AreaLight>(&scene.lights.at(lit))){
+            // do area light sampling here
+            if (auto *sph = std::get_if<Sphere>(&scene.shapes.at(alight->shape_idx))){
+                Real t_temp = hit_sphere(*sph, omeganot, pt);
+                if (t_temp > 0.0){
+                    Vector3 hit_pt = pt + t_temp*omeganot;
+                    d_squared = distance_squared(pt, hit_pt);
+                    // Real cos_theta_max = sqrt(1 - (sph->radius*sph->radius)/length_squared(sph->center-pt));
+                    // Real solid_angle = c_TWOPI*(1-cos_theta_max);
+                    // return  d_squared*1.0 / solid_angle;
+                    Real cosine = dot(omeganot,normalize(sph->center-hit_pt));
+                    Real pdf = 2.0*d_squared/(cosine*(c_FOURPI*(sph->radius*sph->radius)));
+                    return pdf;
+                } else {
+                    continue;
+                }
+            } else if (auto *tri = std::get_if<Triangle>(&scene.shapes.at(alight->shape_idx))){
+                Vector3 p0 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).x);
+                Vector3 p1 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).y);
+                Vector3 p2 = tri->mesh->positions.at(tri->mesh->indices.at(tri->face_index).z);
+                Real t_shadow = get_tri_intersect(p0, p1, p2, omeganot, pt, eps, uv);
+                if (t_shadow > 0.0){
+                    Vector3 hit_pt = pt + t_shadow*omeganot;
+                    //std::cout << "asdfasdfasd" << std::endl;
+                    d_squared = distance_squared(pt, hit_pt);
+                    Vector3 norm =  shading_norm(tri, uv);
+                    Real cosine = dot(omeganot,-norm);
+                    return d_squared/(cosine*(0.5*length(cross(p2-p0,p1-p0))));
+                } else {
+                    continue;
+                }
+            } else {
+                assert(false);
+            }
+        } else {
+            assert(false);
+        }
+    }
+    return 0.0;
+}
 Vector3 mis_path_trace(const Scene &scene, const Vector3 &ray, const Vector3 &ray_origin, pcg32_state &pcg_state, int max_depth){
-    if (max_depth == 0){return Vector3{0.0,0.0,0.0};}
+    if (max_depth <= 0){return Vector3{0.0,0.0,0.0};}
     const Real eps = 0.00001;
     Shape *hs;
     Real t_val = -1.0;
@@ -911,16 +944,28 @@ Vector3 mis_path_trace(const Scene &scene, const Vector3 &ray, const Vector3 &ra
         // brdf calculations
         int spec;
         Vector3 omeganot = brdf_sample(scene, ray, mat, mat_id, sn, gn, pcg_state, spec);
-        Vector3 bounce = omeganot;
         if (spec==1){ // purely specular
             return emission + (kd + (1.0-kd)* pow((1.0 - dot(gn,omeganot)), 5))*mis_path_trace(scene, omeganot, pt, pcg_state, max_depth-1);
         } else {
             Vector3 val;
-            Real pdf;
-            if(brdf_eval(scene, ray, omeganot, mat, mat_id, sn, gn, kd, pcg_state, val, pdf, bounce)){
-                return emission + val*mis_path_trace(scene, bounce, pt, pcg_state, max_depth-1)/pdf;
+            Real brdfpdf;
+            Vector3 light_ray = light_sample(scene, ray, pt, eps, mat, mat_id, sn, gn, pcg_state);
+            Real coinflip = next_pcg32_real<Real>(pcg_state);
+            if (coinflip < 0.5){ // use light ray
+                if (brdf_eval(scene, ray, light_ray, mat, mat_id, sn, gn, kd, pcg_state, val, brdfpdf)){
+                    Real combinedpdf = 0.5*brdfpdf + 0.5*light_pdf(scene, light_ray, pt);
+                    Vector3 temp_vec = val*mis_path_trace(scene, light_ray, pt, pcg_state, max_depth-1)/combinedpdf;
+                    return emission + temp_vec;
+                } else {
+                    return emission;
+                }
             } else {
-                return emission;
+                if (brdf_eval(scene, ray, omeganot, mat, mat_id, sn, gn, kd, pcg_state, val, brdfpdf)){
+                    Real combinedpdf = 0.5*brdfpdf + 0.5*light_pdf(scene, omeganot, pt);
+                    return emission + val*mis_path_trace(scene, omeganot, pt, pcg_state, max_depth-1)/combinedpdf;
+                } else {
+                    return emission;
+                }
             }
         }
     } else {
@@ -1075,11 +1120,7 @@ Vector3 path_trace(const Scene &scene, const Vector3 &ray, const Vector3 &ray_or
             } else {
                 Gi = 1.0;
             }
-            // if (dot(omeganot,halfvec)<0.0 || dot(ray,halfvec)<0.0){
-            //     G = 0;
-            // } else {
-                G = Gnot*Gi;
-            // }
+            G = Gnot*Gi;
 
             return emission + (fh*d*G)/(4*dot(sn,-ray)) *path_trace(scene, omeganot, pt, pcg_state, max_depth-1)/pdf;
         } else {        // scattering, cosine hemisphere sampling and diffuse

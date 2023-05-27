@@ -9,4 +9,4 @@ for index in range(numPoints):
     points.append((r*math.cos((index*2*math.pi)/numPoints), y , r*math.sin((index*2*math.pi)/numPoints)-2.0))
 
 for pt in points:
-    print(f'{{Vector3{{ {pt[0]}, {pt[1]}, {pt[2]}}}, {sphere_r}, 2}},')
+    print(f'<shape type="sphere"> <point name="center" x="{pt[0]}" y="{pt[1]}" z="{pt[2]}"/> <float name="radius" value="{sphere_r}"/></shape>')
